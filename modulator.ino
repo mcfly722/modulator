@@ -46,25 +46,35 @@ void setup() {
     oled.setTextSize(2);
 }
 
-
 void displayFrequency(uint16_t freq, uint8_t power) {
-  char freq_buff[7];
-  char power_buff[8];
+  char freq_buff[6];
+  char power_buff[5];
+  char full_buff[8];
   
   sprintf(freq_buff, "%05d", freq);
   sprintf(power_buff, "%03d%s", power,"%");
+  sprintf(full_buff, "\xDA\xDA\xDA\xDA\xDA");
+
+
   
-  oled.fillScreen(OLED_Backround_Color);
+  oled.setCursor(20,10);
+  oled.setTextColor(OLED_Backround_Color);
+  oled.print(full_buff);
+
   oled.setCursor(20,10);
   oled.setTextColor(OLED_Frequency_Text_Color);
   oled.print(freq_buff);
+
+  oled.setCursor(25,30);
+  oled.setTextColor(OLED_Backround_Color);
+  oled.print(full_buff);
 
   oled.setCursor(25,30);
   
   oled.setTextColor(OLED_Duration_Text_Color);
   
   oled.print(power_buff);
-
+  
 }
 
 uint16_t counter = 0;
@@ -82,7 +92,7 @@ void loop() {
   if (power>999) {
     power=0;
   }
-  
+
     displayFrequency(counter,power);
 
     // no need to be in too much of a hurry
