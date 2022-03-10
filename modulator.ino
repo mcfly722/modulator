@@ -44,58 +44,71 @@ void setup() {
     oled.setFont();
     oled.fillScreen(OLED_Backround_Color);
     oled.setTextSize(2);
+    pinMode(13, OUTPUT);
 }
 
-void displayFrequency(uint16_t freq, uint8_t power) {
-  char freq_buff[6];
-  char power_buff[5];
-  char full_buff[8];
+uint32_t _freq = -1;
+uint32_t _amp = -1;
+
+void displayFrequency(uint32_t freq, uint32_t amp) {
+
+  if (_freq != freq) {
+    char full_buff[10];
+    sprintf(full_buff, "\xDA\xDA\xDA\xDA\xDA\xDA\xDA");
   
-  sprintf(freq_buff, "%05d", freq);
-  sprintf(power_buff, "%03d%s", power,"%");
-  sprintf(full_buff, "\xDA\xDA\xDA\xDA\xDA");
+    char freq_buff[10];
+    sprintf(freq_buff, "%05d%s", freq,"Hz");
 
+    oled.setCursor(8,3);
+    oled.setTextColor(OLED_Backround_Color);
+    oled.print(full_buff);
+    
+    oled.setCursor(8,3);
+    oled.setTextColor(OLED_Frequency_Text_Color);
+    oled.print(freq_buff);
+    
+    _freq=freq;
+  }
+
+  if (_amp != amp) {
+    char full_buff[10];
+    sprintf(full_buff, "\xDA\xDA\xDA\xDA");
+    
+    char amp_buff[10];
+    sprintf(amp_buff, "%03d%s", amp,"%");
 
   
-  oled.setCursor(20,10);
-  oled.setTextColor(OLED_Backround_Color);
-  oled.print(full_buff);
+    oled.setCursor(25,30);
+    oled.setTextColor(OLED_Backround_Color);
+    oled.print(full_buff);
+    
 
-  oled.setCursor(20,10);
-  oled.setTextColor(OLED_Frequency_Text_Color);
-  oled.print(freq_buff);
-
-  oled.setCursor(25,30);
-  oled.setTextColor(OLED_Backround_Color);
-  oled.print(full_buff);
-
-  oled.setCursor(25,30);
+    oled.setCursor(25,30);
+    oled.setTextColor(OLED_Duration_Text_Color);
+    oled.print(amp_buff);
+    
+    _amp = amp;
+  }
   
-  oled.setTextColor(OLED_Duration_Text_Color);
   
-  oled.print(power_buff);
+  
+
   
 }
-
-uint16_t counter = 0;
-uint16_t power = 0;
 
 void loop() {
-  
-  counter++;
-  power++;
-  
-  if (counter>32768) {
-    counter=0;
-  }
+  int sensor1 = analogRead(19);
+  int sensor2 = analogRead(20);
+  int sensor3 = analogRead(21);
 
-  if (power>999) {
-    power=0;
-  }
-
-    displayFrequency(counter,power);
+  uint32_t freq = (uint32_t)((sensor2-1)/8) * 256 + (uint32_t)sensor1 / 4;
+  uint32_t amp = 100*sensor3/1023;
+  
+  displayFrequency(freq, amp);
 
     // no need to be in too much of a hurry
     delay(10);
-   
+    digitalWrite(13, LOW);
+    delay(10);
+    digitalWrite(13, HIGH);
 }
