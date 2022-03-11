@@ -3,7 +3,6 @@
 #include <Adafruit_SSD1331.h>
 #include <SPI.h>
 
-
 // The SSD1331 is connected like this (plus VCC plus GND)
 const uint8_t   OLED_pin_scl_sck        = 7;
 const uint8_t   OLED_pin_sda_mosi       = 11;
@@ -21,7 +20,7 @@ const uint8_t   JACK1_L                 = 22;
 const uint8_t   JACK1_M                 = 23;
 
 // Jack2 (out) pins
-const uint8_t   JACK2_R                 = A14;
+const uint8_t   JACK2_R                 = 6;
 const uint8_t   JACK2_L                 = 3;
 const uint8_t   JACK2_M                 = 5;
 
@@ -40,6 +39,8 @@ const float     AdjustSensorsDelay         = 20;
 
 // Loops per second measure
 const uint32_t  AdjustLoopSpeedMic         = 1000*1000; // 1 sec
+
+#define         M_PI                       3.14159265358979323846
 
 
 // SSD1331 color definitions
