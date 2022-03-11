@@ -11,6 +11,10 @@ const uint8_t   OLED_pin_cs_ss          = 10;
 const uint8_t   OLED_pin_res_rst        = 9;
 const uint8_t   OLED_pin_dc_rs          = 8;
 
+const uint8_t   OLED_max_fps            = 5;
+const uint32_t  OLED_adjust_delay       = 1000 * 1000 / OLED_max_fps;
+
+
 // Jack1 (in) pins
 const uint8_t   JACK1_R                 = 4;
 const uint8_t   JACK1_L                 = 22;
@@ -107,6 +111,10 @@ uint32_t lps = 0;
 uint32_t _lps = 0;
 
 uint32_t _adjustLoopSpeedMic = micros();
+uint32_t _OLED_adjust_delay = micros();
+
+
+
 
 void loop() {
 
@@ -165,64 +173,66 @@ void loop() {
   
   analogWrite(JACK2_L, sensor3);
   analogWrite(JACK2_R, sensor3);
-  
- 
-  if ((int)_freq != (int)frequency) {
-    _freq = (int)frequency;
 
-    char full_buff[20];
-    sprintf(full_buff, "\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA");
-  
-    char freq_buff[20];
-    sprintf(freq_buff, "freq:%9d%s", (int)_freq,"Hz");
+  // do not update display more often than OLED_max_fps
+  if (adjust > _OLED_adjust_delay + OLED_adjust_delay) {
+    _OLED_adjust_delay = adjust;
 
-    oled.setCursor(0,44);
-    oled.setTextColor(OLED_Backround_Color);
-    oled.print(full_buff);
+    // show frequency info
+    if ((int)_freq != (int)frequency) {
+      _freq = (int)frequency;
+
+      char full_buff[20];
+      sprintf(full_buff, "\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA");
+  
+      char freq_buff[20];
+      sprintf(freq_buff, "freq:%9d%s", (int)_freq,"Hz");
+
+      oled.setCursor(0,44);
+      oled.setTextColor(OLED_Backround_Color);
+      oled.print(full_buff);
     
-    oled.setCursor(0,44);
-    oled.setTextColor(OLED_Frequency_Text_Color);
-    oled.print(freq_buff);
+      oled.setCursor(0,44);
+      oled.setTextColor(OLED_Frequency_Text_Color);
+      oled.print(freq_buff);
+    }
+
+    // show amplitude intro
+    if (_amp != amp) {
+      _amp = amp;
+
+      char full_buff[10];
+      sprintf(full_buff, "\xDA\xDA\xDA\xDA");
     
+      char amp_buff[10];
+      sprintf(amp_buff, "%03d%s", (int)amp,"%");
+  
+      oled.setCursor(25,30);
+      oled.setTextColor(OLED_Backround_Color);
+      oled.print(full_buff);
+
+      oled.setCursor(25,30);
+      oled.setTextColor(OLED_Duration_Text_Color);
+      oled.print(amp_buff);
+    }
+
+    // show lps (loops per second) info 
+    if (_lps != lps) {
+      _lps = lps;
+    
+      char full_buff[20];
+      sprintf(full_buff, "\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA");
+  
+      char freq_buff[20];
+      sprintf(freq_buff, "lps:%12lu", _lps);
+
+      oled.setCursor(0,54);
+      oled.setTextColor(OLED_Backround_Color);
+      oled.print(full_buff);
+    
+      oled.setCursor(0,54);
+      oled.setTextColor(OLED_Frequency_Text_Color);
+      oled.print(freq_buff);
+    }
   }
-
-  if (_amp != amp) {
-    _amp = amp;
-
-    char full_buff[10];
-    sprintf(full_buff, "\xDA\xDA\xDA\xDA");
-    
-    char amp_buff[10];
-    sprintf(amp_buff, "%03d%s", (int)amp,"%");
-
-  
-    oled.setCursor(25,30);
-    oled.setTextColor(OLED_Backround_Color);
-    oled.print(full_buff);
-    
-
-    oled.setCursor(25,30);
-    oled.setTextColor(OLED_Duration_Text_Color);
-    oled.print(amp_buff);
-    
-  }
-
-  if (_lps != lps) {
-    _lps = lps;
-    
-    char full_buff[20];
-    sprintf(full_buff, "\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA");
-  
-    char freq_buff[20];
-    sprintf(freq_buff, "lps:%12lu", _lps);
-
-    oled.setCursor(0,54);
-    oled.setTextColor(OLED_Backround_Color);
-    oled.print(full_buff);
-    
-    oled.setCursor(0,54);
-    oled.setTextColor(OLED_Frequency_Text_Color);
-    oled.print(freq_buff);
-  }
-  
 }
