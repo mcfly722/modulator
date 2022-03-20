@@ -18,6 +18,8 @@ const unsigned int    FREQ_AVG_SAMPLES          = 15000;
 const float           FREQ_MAX_HZ               = 32000;
 const byte            MODE_AND_PWM_WIDTH_PIN    = 21;
 
+const unsigned int    PWM_IN_AVG_SAMPLES        = 1500;
+
 const unsigned int    OLED_MAX_FPS              = 10;
 const unsigned int    OLED_WIDTH                = 16;
 const unsigned int    OLED_HEIGHT               = 8;
@@ -68,7 +70,7 @@ void oled_update(){
     char oled_update_buffer[OLED_WIDTH * OLED_HEIGHT];
     
     const char *modes[3] = { "GENERATION", "PWM1", "PWM2" };
-    sprintf(oled_update_buffer, "pwm1:%11upwm2:%11umode:%11spwmOut:%4u=%3lu%sfreq:%9luHzloops/s:%8luscrMic:%9lu%16s", pwm1, pwm2, modes[mode], pwmOut,((unsigned long)pwmOut)*100/1024 ,"%", freq, loopsPS, scrMic, "");
+    sprintf(oled_update_buffer, "pwm1:%11upwm2:%11umode:%11spwmOut:%4u=%3lu%sfreq:%9luHzloops/s:%8luscrMic:%9lu%16s", pwm1, pwm2, modes[mode], pwmOut,((unsigned long)pwmOut)*100/1024 ,"%", freq, 1000*(loopsPS/1000), 10000*(scrMic/10000), "");
 
     unsigned int x = oled_char_counter / OLED_HEIGHT;
     unsigned int y = oled_char_counter % OLED_HEIGHT;
@@ -135,7 +137,6 @@ void calc_freq(){
     }
     
   }
-
   
 }
 
@@ -172,6 +173,19 @@ void calc_mode_and_pwm_width(){
 }
 
 
+float _pwm1 = 0;
+float _pwm2 = 0;
+
+void get_pwm_values(){
+
+  _pwm1 = (analogRead(PWM1_IN_PIN) + PWM_IN_AVG_SAMPLES * _pwm1) / (PWM_IN_AVG_SAMPLES + 1);
+  _pwm2 = (analogRead(PWM2_IN_PIN) + PWM_IN_AVG_SAMPLES * _pwm2) / (PWM_IN_AVG_SAMPLES + 1);
+
+  pwm1 = _pwm1;
+  pwm2 = _pwm2;
+
+}
+
 void setup() {
     oled.begin();
     oled.setFont();
@@ -182,7 +196,7 @@ void setup() {
     digitalWrite(13, HIGH);
 
     pinMode(PWM1_IN_PIN, INPUT);
-    pinMode(PWM1_IN_PIN, INPUT);
+    pinMode(PWM2_IN_PIN, INPUT);
     
     pinMode(PWM1_OUT_PIN, OUTPUT);
     pinMode(PWM2_OUT_PIN, OUTPUT);
@@ -200,8 +214,10 @@ void loop() {
   current_time = micros();
 
   calc_freq();
+
+  get_pwm_values();
   
-  //calc_mode_and_pwm_width();
+  calc_mode_and_pwm_width();
 
   oled_update();
 
