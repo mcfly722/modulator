@@ -3,237 +3,207 @@
 #include <Adafruit_SSD1331.h>
 #include <SPI.h>
 
-// The SSD1331 is connected like this (plus VCC plus GND)
-const uint8_t   OLED_pin_scl_sck        = 7;
-const uint8_t   OLED_pin_sda_mosi       = 11;
-const uint8_t   OLED_pin_cs_ss          = 10;
-const uint8_t   OLED_pin_res_rst        = 9;
-const uint8_t   OLED_pin_dc_rs          = 8;
+const byte            PWM1_IN_PIN               = A0;
+const byte            PWM2_IN_PIN               = A1;
 
-const uint8_t   OLED_max_fps            = 5;
-const uint32_t  OLED_adjust_delay       = 1000 * 1000 / OLED_max_fps;
+const byte            PWM1_OUT_PIN              = 6;
+const byte            PWM2_OUT_PIN              = 3;
 
+const unsigned long   FREQ_ADJUST_TIMES_PER_SEC = 30;
+const unsigned long   FREQ_ADJUST_INTERVAL_MIC  = (1000 * 1000) / FREQ_ADJUST_TIMES_PER_SEC;
 
-// Jack1 (in) pins
-const uint8_t   JACK1_R                 = 4;
-const uint8_t   JACK1_L                 = 22;
-const uint8_t   JACK1_M                 = 23;
+const byte            FREQ_HIGH_SELECT_PIN      = 19; 
+const byte            FREQ_LOW_SELECT_PIN       = 20;
+const unsigned int    FREQ_AVG_SAMPLES          = 15000;
+const float           FREQ_MAX_HZ               = 32000;
+const byte            MODE_AND_PWM_WIDTH_PIN    = 21;
 
-// Jack2 (out) pins
-const uint8_t   JACK2_R                 = 6;
-const uint8_t   JACK2_L                 = 3;
-const uint8_t   JACK2_M                 = 5;
+const unsigned int    OLED_MAX_FPS              = 10;
+const unsigned int    OLED_WIDTH                = 16;
+const unsigned int    OLED_HEIGHT               = 8;
+const unsigned long   OLED_NEXT_CHAR_DELAY      = (1000 * 1000 / OLED_MAX_FPS) / (OLED_WIDTH * OLED_HEIGHT);
 
-// Sensors pins
-const uint8_t   SENSOR1_pin             = 19;
-const uint8_t   SENSOR2_pin             = 20;
-const uint8_t   SENSOR3_pin             = 21;
+const unsigned int    OLED_TEXT_COLOR           = 0xFFFF;
+const unsigned int    OLED_BACKGROUND_COLOR     = 0x0307;
 
-// Interval in microseconds to adjust frequency
-const uint32_t  AdjustFrequencyIntervalMic = 1000;
-const float     AdjustFrequencyDelay       = 5;
-
-// Interval in microseconds to adjust sensors
-const uint32_t  AdjustSensorsIntervalMic   = 1000;
-const float     AdjustSensorsDelay         = 20;
-
-// Loops per second measure
-const uint32_t  AdjustLoopSpeedMic         = 1000*1000; // 1 sec
-
-#define         M_PI                       3.14159265358979323846
-
-
-// SSD1331 color definitions
-const uint16_t  OLED_Color_Black        = 0x0000;
-const uint16_t  OLED_Color_Blue         = 0x001F;
-const uint16_t  OLED_Color_Red          = 0xF800;
-const uint16_t  OLED_Color_Green        = 0x07E0;
-const uint16_t  OLED_Color_Cyan         = 0x07FF;
-const uint16_t  OLED_Color_Magenta      = 0xF81F;
-const uint16_t  OLED_Color_Yellow       = 0xFFE0;
-const uint16_t  OLED_Color_White        = 0xFFFF;
-
-// The colors we actually want to use
-uint16_t        OLED_Frequency_Text_Color = 0xFFFF;
-uint16_t        OLED_Duration_Text_Color  = 0x07FF;
-uint16_t        OLED_Backround_Color      = 0x0307;
+const byte            OLED_PIN_scl_sck          = 7;
+const byte            OLED_PIN_sda_mosi         = 11;
+const byte            OLED_PIN_cs_ss            = 10;
+const byte            OLED_PIN_res_rst          = 9;
+const byte            OLED_PIN_dc_rs            = 8;
 
 // declare the display
-Adafruit_SSD1331 oled =
-    Adafruit_SSD1331(
-        OLED_pin_cs_ss,
-        OLED_pin_dc_rs,
-        OLED_pin_sda_mosi,
-        OLED_pin_scl_sck,
-        OLED_pin_res_rst
-     );
+Adafruit_SSD1331 oled = Adafruit_SSD1331(
+  OLED_PIN_cs_ss,
+  OLED_PIN_dc_rs,
+  OLED_PIN_sda_mosi,
+  OLED_PIN_scl_sck,
+  OLED_PIN_res_rst
+);
+
+unsigned long current_time = micros();
+
+unsigned long oled_update_deadline = micros();
+
+unsigned int  pwm1    = 1;
+unsigned int  pwm2    = 2;
+unsigned int  mode    = 0;
+unsigned int  pwmOut  = 300;
+unsigned long freq    = 123456;
+unsigned long loopsPS = 0;
+unsigned long scrMic  = 0;
+
+unsigned long scr_counter = 0;
+
+char oled_current_buffer[OLED_WIDTH * OLED_HEIGHT];
+unsigned int  oled_char_counter = 0;
+
+void oled_update(){
+  
+  if (current_time > oled_update_deadline) {
+    oled_update_deadline = current_time + OLED_NEXT_CHAR_DELAY;
+
+    unsigned int current = micros();
+
+    char oled_update_buffer[OLED_WIDTH * OLED_HEIGHT];
+    
+    const char *modes[3] = { "GENERATION", "PWM1", "PWM2" };
+    sprintf(oled_update_buffer, "pwm1:%11upwm2:%11umode:%11spwmOut:%4u=%3lu%sfreq:%9luHzloops/s:%8luscrMic:%9lu%16s", pwm1, pwm2, modes[mode], pwmOut,((unsigned long)pwmOut)*100/1024 ,"%", freq, loopsPS, scrMic, "");
+
+    unsigned int x = oled_char_counter / OLED_HEIGHT;
+    unsigned int y = oled_char_counter % OLED_HEIGHT;
+    int c = y * OLED_WIDTH + x;
+
+    if (oled_current_buffer[c] != oled_update_buffer[c]) {
+      oled_current_buffer[c] = oled_update_buffer[c];
+      
+      oled.setCursor(x * 6, y * 8);
+      oled.setTextColor(OLED_BACKGROUND_COLOR);
+      oled.print("\xDA");
+
+      oled.setCursor(x * 6, y * 8);
+      oled.setTextColor(OLED_TEXT_COLOR);
+      oled.print(oled_update_buffer[c]);
+    }
+
+    scr_counter += micros() - current;
+
+    oled_char_counter++;
+    oled_char_counter = oled_char_counter % (OLED_WIDTH * OLED_HEIGHT);
+  }
+}
+
+unsigned long current_sec_deadline = micros();
+unsigned long current_loops_counter = 0;
+
+void calc_loopsPS(){
+  if (current_time > current_sec_deadline) {
+    loopsPS = current_loops_counter;
+    scrMic = scr_counter;
+    current_loops_counter = 0;
+    scr_counter = 0;
+    current_sec_deadline =  current_time + 1000 * 1000;
+  } else {
+    current_loops_counter++;  
+  }
+}
+
+
+float _freq = -1;
+unsigned long current_freq_deadline = micros();
+
+void calc_freq(){
+  
+  unsigned int high = analogRead(FREQ_HIGH_SELECT_PIN) - 1;
+  unsigned int low = analogRead(FREQ_LOW_SELECT_PIN) - 1;
+  
+  float __freq = (((float)(high * 1023 + (float)low)) / 1023) * (FREQ_MAX_HZ  / 1023);
+  
+  _freq = (__freq + FREQ_AVG_SAMPLES * _freq) / (FREQ_AVG_SAMPLES + 1);
+
+  if (current_time > current_freq_deadline) {
+    current_freq_deadline = current_time + FREQ_ADJUST_INTERVAL_MIC;
+
+    if (freq != (unsigned long)_freq){
+      freq = (unsigned long)_freq;
+      
+      analogWriteFrequency(PWM1_OUT_PIN, freq);
+      analogWrite(PWM1_OUT_PIN, pwmOut);
+
+      analogWriteFrequency(PWM2_OUT_PIN, freq);
+      analogWrite(PWM2_OUT_PIN, pwmOut);
+    }
+    
+  }
+
+  
+}
+
+unsigned int _pwmOut = -1;
+void calc_mode_and_pwm_width(){
+  unsigned int s = analogRead(MODE_AND_PWM_WIDTH_PIN);
+  
+  // Mode
+  if (s >= 0 && s < 341) {
+     mode = 1;
+     pwmOut = (s - 1) *1024 / 341;
+  }
+    
+  if (s >= 342 && s < 683) {
+     mode = 2;
+     pwmOut = (684 - s) * 1024 / 341;
+  }
+    
+  if (s >= 683 && s < 1024) {
+     mode = 0;
+     pwmOut = 4 + (s - 683) * 1024 / 340;
+  }
+
+  if (pwmOut > 1024) {
+    pwmOut = 1024;
+  }
+
+  if (pwmOut != _pwmOut) {
+    _pwmOut = pwmOut;
+    analogWrite(PWM1_OUT_PIN, pwmOut);
+    analogWrite(PWM2_OUT_PIN, pwmOut);
+  }
+
+}
 
 
 void setup() {
     oled.begin();
     oled.setFont();
-    oled.fillScreen(OLED_Backround_Color);
+    oled.fillScreen(OLED_BACKGROUND_COLOR);
     oled.setTextSize(1);
+
     pinMode(13, OUTPUT);
-
-    pinMode(JACK1_R, OUTPUT);
-    pinMode(JACK1_L, OUTPUT);
-    pinMode(JACK1_M, OUTPUT);
-    pinMode(JACK2_R, OUTPUT);
-    pinMode(JACK2_L, OUTPUT);
-    pinMode(JACK2_M, OUTPUT);
-    
-    analogWriteResolution(10); // 0 - 1024
-
     digitalWrite(13, HIGH);
+
+    pinMode(PWM1_IN_PIN, INPUT);
+    pinMode(PWM1_IN_PIN, INPUT);
+    
+    pinMode(PWM1_OUT_PIN, OUTPUT);
+    pinMode(PWM2_OUT_PIN, OUTPUT);
+
+    pinMode(MODE_AND_PWM_WIDTH_PIN, INPUT);
+
+    pinMode(FREQ_HIGH_SELECT_PIN, INPUT);
+    pinMode(FREQ_LOW_SELECT_PIN, INPUT);
+
+    analogWriteResolution(10); // 0 - 1024
+    analogReadResolution(10); // 0 - 1024
 }
 
-uint32_t _freq = -1;
-uint32_t _freq_carrier = -1;
-uint32_t _amp = -1;
-
-float     frequency = -1;
-float    _frequency = -1;
-
-uint32_t _adjust = micros();
-
-uint32_t _adjustSensorsIntervalMic = micros();
-
-float _sensor1 = 1;
-float _sensor2 = 1;
-float _sensor3 = 1;
-
-uint16_t sensor1 = 1;
-uint16_t sensor2 = 1;
-uint16_t sensor3 = 1;
-
-uint32_t lpsCounter = 0;
-uint32_t lps = 0;
-uint32_t _lps = 0;
-
-uint32_t _adjustLoopSpeedMic = micros();
-uint32_t _OLED_adjust_delay = micros();
-
-
-
-
 void loop() {
+  current_time = micros();
 
-  uint32_t adjust = micros();
-
-  if (adjust > _adjustLoopSpeedMic + AdjustLoopSpeedMic) {
-    _adjustLoopSpeedMic = adjust;
-    lps = lpsCounter;
-    lpsCounter = 0;
-  }
-  lpsCounter++;
+  calc_freq();
   
+  //calc_mode_and_pwm_width();
 
-  int s1 = analogRead(SENSOR1_pin);
-  int s2 = analogRead(SENSOR2_pin);
-  int s3 = analogRead(SENSOR3_pin);
-    
-  _sensor1 = ((float)s1 + AdjustSensorsDelay * _sensor1) / (AdjustSensorsDelay + 1);
-  _sensor2 = ((float)s2 + AdjustSensorsDelay * _sensor2) / (AdjustSensorsDelay + 1);
-  _sensor3 = ((float)s3 + AdjustSensorsDelay * _sensor3) / (AdjustSensorsDelay + 1);
+  oled_update();
 
-  if (adjust > _adjustSensorsIntervalMic + AdjustSensorsIntervalMic) {
-    _adjustSensorsIntervalMic = adjust;
-    sensor1 = (uint16_t)_sensor1;
-    sensor2 = (uint16_t)_sensor2;
-    sensor3 = (uint16_t)_sensor3;
-  }
-  
-  
-  uint32_t freq = (uint32_t)((sensor2-1)/8) * 256 + sensor1 / 4;
-  uint32_t amp = sensor3 * 100 / 1023;
-
-  // adjust output frequency to selected
-  if (adjust > _adjust + AdjustFrequencyIntervalMic) {
-    _adjust = adjust;
-
-    frequency = ((float)freq + AdjustFrequencyDelay * frequency) / (AdjustFrequencyDelay + 1);
-
-    // if frequency are equal to selected do not set it again to exclude additional noise
-    if ((int)frequency != (int)_frequency) {
-      _frequency = frequency;
-      
-      analogWriteFrequency(JACK1_R, frequency);
-      analogWriteFrequency(JACK1_L, frequency);
-      analogWriteFrequency(JACK1_M, frequency);
-
-      analogWriteFrequency(JACK2_R, frequency);
-      analogWriteFrequency(JACK2_L, frequency);
-      analogWriteFrequency(JACK2_M, frequency);
-    }
-  }
-  
-
-  //analogWrite(JACK1_L, sensor3);
-  //analogWrite(JACK1_R, sensor3);
-  
-  analogWrite(JACK2_L, sensor3);
-  analogWrite(JACK2_R, sensor3);
-
-  // do not update display more often than OLED_max_fps
-  if (adjust > _OLED_adjust_delay + OLED_adjust_delay) {
-    _OLED_adjust_delay = adjust;
-
-    // show frequency info
-    if ((int)_freq != (int)frequency) {
-      _freq = (int)frequency;
-
-      char full_buff[20];
-      sprintf(full_buff, "\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA");
-  
-      char freq_buff[20];
-      sprintf(freq_buff, "freq:%9d%s", (int)_freq,"Hz");
-
-      oled.setCursor(0,44);
-      oled.setTextColor(OLED_Backround_Color);
-      oled.print(full_buff);
-    
-      oled.setCursor(0,44);
-      oled.setTextColor(OLED_Frequency_Text_Color);
-      oled.print(freq_buff);
-    }
-
-    // show amplitude intro
-    if (_amp != amp) {
-      _amp = amp;
-
-      char full_buff[10];
-      sprintf(full_buff, "\xDA\xDA\xDA\xDA");
-    
-      char amp_buff[10];
-      sprintf(amp_buff, "%03d%s", (int)amp,"%");
-  
-      oled.setCursor(25,30);
-      oled.setTextColor(OLED_Backround_Color);
-      oled.print(full_buff);
-
-      oled.setCursor(25,30);
-      oled.setTextColor(OLED_Duration_Text_Color);
-      oled.print(amp_buff);
-    }
-
-    // show lps (loops per second) info 
-    if (_lps != lps) {
-      _lps = lps;
-    
-      char full_buff[20];
-      sprintf(full_buff, "\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA\xDA");
-  
-      char freq_buff[20];
-      sprintf(freq_buff, "lps:%12lu", _lps);
-
-      oled.setCursor(0,54);
-      oled.setTextColor(OLED_Backround_Color);
-      oled.print(full_buff);
-    
-      oled.setCursor(0,54);
-      oled.setTextColor(OLED_Frequency_Text_Color);
-      oled.print(freq_buff);
-    }
-  }
+  calc_loopsPS();
 }
