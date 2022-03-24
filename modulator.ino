@@ -5,7 +5,7 @@
 
 const float           FREQ_MAX_HZ                        = 32000;
 
-const unsigned int    PWM_IN_AVG_SAMPLES                 = 5000;
+const unsigned int    PWM_IN_AVG_SAMPLES                 = 1000;
 
 const unsigned long   PWM_OUT_WIDTH_SAMPLES              = 1000;
 const unsigned long   PWM_OUT_FREQ_SAMPLES               = 1000;
